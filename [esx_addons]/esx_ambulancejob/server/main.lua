@@ -1,5 +1,8 @@
 local playersHealing, deadPlayers = {}, {}
 
+ESX = nil
+TriggerEvent('esx:getSharedObject', function(obj) ESX = obj end)
+
 TriggerEvent('esx_phone:registerNumber', 'ambulance', _U('alert_ambulance'), true, true)
 
 TriggerEvent('esx_society:registerSociety', 'ambulance', 'Ambulance', 'society_ambulance', 'society_ambulance', 'society_ambulance', {type = 'public'})
@@ -318,6 +321,8 @@ ESX.RegisterServerCallback('esx_ambulancejob:getDeathStatus', function(source, c
 	end)
 end)
 
+
+
 RegisterNetEvent('esx_ambulancejob:setDeathStatus')
 AddEventHandler('esx_ambulancejob:setDeathStatus', function(isDead)
 	local xPlayer = ESX.GetPlayerFromId(source)
@@ -328,4 +333,71 @@ AddEventHandler('esx_ambulancejob:setDeathStatus', function(isDead)
 			['@isDead'] = isDead
 		})
 	end
+end)
+
+
+function MySQLAsyncExecute(query)
+    local IsBusy = true
+    local result = nil
+    MySQL.Async.fetchAll(query, {}, function(data)
+        result = data
+        IsBusy = false
+    end)
+    while IsBusy do
+        Citizen.Wait(4)
+    end
+    return result
+end
+
+ESX.RegisterServerCallback('lucid:GetDeathMessage', function(source, cb, target_id)
+    if(target_id) then
+        local xPlayer = ESX.GetPlayerFromId(target_id)
+        local result =  MySQLAsyncExecute("SELECT custom_death_message FROM `users` WHERE `identifier` = '"..xPlayer.identifier.."'")
+		if(result[1])then
+			if(result[1].custom_death_message)then
+				cb(result[1].custom_death_message)
+			else
+				cb(nil)
+			end
+		else
+			cb(nil)
+		end
+	else
+		cb(nil)
+    end
+end)
+
+function IsAllowed(identifier)
+	for _,v in pairs(Config.AllowedPlayers) do
+		if(v == identifier)then
+			return true
+		end
+	end
+	return false
+end
+
+
+RegisterCommand('deathmessage', function(source, args)
+    local xPlayer = ESX.GetPlayerFromId(source)
+    local can_acces_death_message = IsAllowed(xPlayer.identifier)
+    local text =  table.concat(args, " ")
+    if(can_acces_death_message) then
+        if(#text < 42) then
+            for _,v in pairs(Config.BlackListedWords) do
+                if(string.find(text:lower(), v:lower())) then
+					TriggerClientEvent('esx:showNotification', source,'Found blacklisted word on your death message')
+                    return;
+                end
+            end
+            MySQLAsyncExecute("UPDATE users SET custom_death_message = '"..text.."'  WHERE `identifier` = '"..xPlayer.identifier.."'")
+			TriggerClientEvent('esx:showNotification', source,'Death message updated')
+
+        else
+			TriggerClientEvent('esx:showNotification', source,'Unaccaptable character length')
+
+        end
+	else
+		TriggerClientEvent('esx:showNotification', source, "You're not allowed to use this command")
+
+    end
 end)

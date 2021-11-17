@@ -1,6 +1,15 @@
 local firstSpawn = true
-
+local scaleform
 isDead, isSearched, medic = false, false, 0
+
+ESX = nil
+
+Citizen.CreateThread(function()
+	while ESX == nil do
+		TriggerEvent('esx:getSharedObject', function(obj) ESX = obj end)
+		Citizen.Wait(0)
+	end
+end)
 
 RegisterNetEvent('esx:playerLoaded')
 AddEventHandler('esx:playerLoaded', function(xPlayer)
@@ -14,6 +23,7 @@ AddEventHandler('esx:onPlayerLogout', function()
 	ESX.PlayerData = {}
 	firstSpawn = true
 end)
+
 
 RegisterNetEvent('esx:setJob')
 AddEventHandler('esx:setJob', function(job)
@@ -108,15 +118,75 @@ AddEventHandler('esx_ambulancejob:clsearch', function(medicId)
 	end
 end)
 
-function OnPlayerDeath()
-	isDead = true
-	ESX.UI.Menu.CloseAll()
-	TriggerServerEvent('esx_ambulancejob:setDeathStatus', true)
+function OnPlayerDeath(datal)
+	local death
+	local kb = nil
+	local Melee = { -1569615261, 1737195953, 1317494643, -1786099057, 1141786504, -2067956739, -868994466 }
+	local Bullet = { 453432689, 1593441988, 584646201, -1716589765, 324215364, 736523883, -270015777, -1074790547, -2084633992, -1357824103, -1660422300, 2144741730, 487013001, 2017895192, -494615257, -1654528753, 100416529, 205991906, 1119849093 }
+	local Knife = { -1716189206, 1223143800, -1955384325, -1833087301, 910830060, }
+	local Car = { 133987706, -1553120962 }
+	local Animal = { -100946242, 148160082 }
+	local FallDamage = { -842959696 }
+	local Explosion = { -1568386805, 1305664598, -1312131151, 375527679, 324506233, 1752584910, -1813897027, 741814745, -37975472, 539292904, 341774354, -1090665087 }
+	local Gas = { -1600701090 }
+	local Burn = { 615608432, 883325847, -544306709 }
+	local Drown = { -10959621, 1936677264 }
 
-	StartDeathTimer()
-	StartDistressSignal()
+	local playerPed = PlayerPedId()
+    death = datal.deathCause
+	local killer_server_id = datal.killerServerId
 
-	StartScreenEffect('DeathFailOut', 0, false)
+	ESX.TriggerServerCallback('lucid:GetDeathMessage', function(death_message) 
+		if checkArray (Melee, death) then
+			kb = "with a "..GET_WEAPON_LABEL(death)
+		elseif checkArray (Bullet, death) then
+			kb = "with a "..GET_WEAPON_LABEL(death)
+		elseif checkArray (Knife, death) then
+			kb = "with a "..GET_WEAPON_LABEL(death)
+		elseif checkArray (Car, death) then
+			kb = "with a hit by car"
+		elseif checkArray (Animal, death) then
+			kb = "Killed by animal"
+		elseif checkArray (FallDamage, death) then
+			kb = "got fall damage"
+		elseif checkArray (Explosion, death) then
+			kb = "got exploded"
+		elseif checkArray (Gas, death) then
+			kb = "Died of gas"
+		elseif checkArray (Burn, death) then
+			kb = "got burned"
+		elseif checkArray (Drown, death) then
+		 kb = "got drowned"
+		else
+			kb = "Dead of unknown"
+		end
+
+		killer = GetPedSourceOfDeath(playerPed)
+		isDead = true
+		ESX.UI.Menu.CloseAll()
+		TriggerServerEvent('esx_ambulancejob:setDeathStatus', true)
+		local sec_message = "You died by : "..GetPlayerName(datal.killerClientId).. "  "..kb.." "
+
+		if(datal.killerClientId) then
+			sec_message = "You died by : "..GetPlayerName(datal.killerClientId).. "  "..kb.." "
+		else
+			sec_message = "You died  :  "..kb.." "
+		end
+
+		if(death_message ~= nil) then
+
+			if(datal.killerClientId) then
+				sec_message = "You were killed by : "..GetPlayerName(datal.killerClientId).. "  "..kb.." "
+			else
+				sec_message = "You were killed by : "..kb.." "
+			end
+		else
+			death_message  = sec_message
+			sec_message = ''
+		end
+		StartDeathTimer(sec_message, death_message)
+	end, killer_server_id)
+
 end
 
 RegisterNetEvent('esx_ambulancejob:useItem')
@@ -217,9 +287,10 @@ function secondsToClock(seconds)
 	end
 end
 
-function StartDeathTimer()
+function StartDeathTimer(death_reason, death_message)
 	local canPayFine = false
 
+	ShowDeathScreen(death_reason, death_message)
 	if Config.EarlyRespawnFine then
 		ESX.TriggerServerCallback('esx_ambulancejob:checkBalance', function(canPay)
 			canPayFine = canPay
@@ -255,29 +326,23 @@ function StartDeathTimer()
 		-- early respawn timer
 		while earlySpawnTimer > 0 and isDead do
 			Citizen.Wait(0)
-			text = _U('respawn_available_in', secondsToClock(earlySpawnTimer))
-
-			DrawGenericTextThisFrame()
-
-			SetTextEntry('STRING')
-			AddTextComponentString(text)
-			DrawText(0.5, 0.8)
+			local mins, sec = secondsToClock(earlySpawnTimer)
+			DrawTimerBar(" "..mins..':'..sec.. ' minutes to respawn', "",2)
 		end
 
 		-- bleedout timer
 		while bleedoutTimer > 0 and isDead do
 			Citizen.Wait(0)
-			text = _U('respawn_bleedout_in', secondsToClock(bleedoutTimer))
+			local mins, sec = secondsToClock(bleedoutTimer)
+			DrawTimerBar("Bleeding out in "..mins..':'..sec.." minutes", "", 3)
+			DrawTimerBar("hold E to respawn", "", 2)
 
 			if not Config.EarlyRespawnFine then
-				text = text .. _U('respawn_bleedout_prompt')
-
 				if IsControlPressed(0, 38) and timeHeld > 60 then
 					RemoveItemsAfterRPDeath()
 					break
 				end
 			elseif Config.EarlyRespawnFine and canPayFine then
-				text = text .. _U('respawn_bleedout_fine', ESX.Math.GroupDigits(Config.EarlyRespawnFineAmount))
 
 				if IsControlPressed(0, 38) and timeHeld > 60 then
 					TriggerServerEvent('esx_ambulancejob:payFine')
@@ -291,12 +356,6 @@ function StartDeathTimer()
 			else
 				timeHeld = 0
 			end
-
-			DrawGenericTextThisFrame()
-
-			SetTextEntry('STRING')
-			AddTextComponentString(text)
-			DrawText(0.5, 0.8)
 		end
 
 		if bleedoutTimer < 1 and isDead then
@@ -327,6 +386,7 @@ function RemoveItemsAfterRPDeath()
 
 			StopScreenEffect('DeathFailOut')
 			DoScreenFadeIn(800)
+			sf = nil
 		end)
 	end)
 end
@@ -340,6 +400,7 @@ function RespawnPed(ped, coords, heading)
 	TriggerServerEvent('esx:onPlayerSpawn')
 	TriggerEvent('esx:onPlayerSpawn')
 	TriggerEvent('playerSpawned') -- compatibility with old scripts, will be removed soon
+	sf = nil
 end
 
 RegisterNetEvent('esx_phone:loaded')
@@ -354,7 +415,7 @@ AddEventHandler('esx_phone:loaded', function(phoneNumber, contacts)
 end)
 
 AddEventHandler('esx:onPlayerDeath', function(data)
-	OnPlayerDeath()
+	OnPlayerDeath(data)
 end)
 
 RegisterNetEvent('esx_ambulancejob:revive')
@@ -379,6 +440,7 @@ AddEventHandler('esx_ambulancejob:revive', function()
 
 	StopScreenEffect('DeathFailOut')
 	DoScreenFadeIn(800)
+	sf = nil
 end)
 
 -- Load unloaded IPLs

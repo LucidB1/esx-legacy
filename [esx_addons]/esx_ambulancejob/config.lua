@@ -19,6 +19,20 @@ Config.RemoveWeaponsAfterRPDeath  = true
 Config.RemoveCashAfterRPDeath     = true
 Config.RemoveItemsAfterRPDeath    = true
 
+
+
+----------------------------- Death message ----------------------------- 
+
+Config.AllowedPlayers = {
+	"steam:11000011777c126",
+}
+
+Config.BlackListedWords = {
+	"test1", "test", "test2"
+}
+----------------------------- Death message ----------------------------- 
+
+
 -- Let the player pay for respawning early, only if he can afford it.
 Config.EarlyRespawnFine           = false
 Config.EarlyRespawnFineAmount     = 5000
